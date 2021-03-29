@@ -195,6 +195,7 @@ func (s *PutInGH) PutInReleasesAssetWithFile(ctx context.Context, owner, repo, r
 		repositoryRelease, _, err := s.cliv3.Repositories.CreateRelease(ctx, owner, repo, &ghv3.RepositoryRelease{
 			Name:    &release,
 			TagName: &release,
+			Draft:   new(bool),
 		})
 		if err != nil {
 			return "", err
