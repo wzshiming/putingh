@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -12,14 +13,14 @@ import (
 
 var usage = `putingh
 Usage:
-	GH_TOKEN=xxx putingh git://owner/repo/branch/name localfile
-	GH_TOKEN=xxx putingh asset://owner/repo/release/name localfile
-	GH_TOKEN=xxx putingh gist://owner/description/name localfile
+	GH_TOKEN=xxx putingh git://owner/repo/branch/name [localfile]
+	GH_TOKEN=xxx putingh asset://owner/repo/release/name [localfile]
+	GH_TOKEN=xxx putingh gist://owner/description/name [localfile]
 `
 
 func main() {
 	args := os.Args[1:]
-	if len(args) != 2 {
+	if len(args) == 0 || len(args) > 2 {
 		fmt.Fprint(os.Stderr, usage)
 		return
 	}
@@ -43,9 +44,18 @@ func main() {
 		GitEmail:         os.Getenv("GIT_EMAIL"),
 		GitCommitMessage: os.Getenv("GIT_COMMIT_MESSAGE"),
 	})
-	url, err := putter.PutInWithFile(ctx, args[0], args[1])
-	if err != nil {
-		log.Fatalf("put error: %s", err)
+
+	if len(args) == 2 {
+		url, err := putter.PutInWithFile(ctx, args[0], args[1])
+		if err != nil {
+			log.Fatalf("put error: %s", err)
+		}
+		fmt.Println(url)
+	} else {
+		r, err := putter.GetFrom(ctx, args[0])
+		if err != nil {
+			log.Fatalf("get error: %s", err)
+		}
+		io.Copy(os.Stdout, r)
 	}
-	fmt.Println(url)
 }
