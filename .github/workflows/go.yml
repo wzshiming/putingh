@@ -2,12 +2,8 @@ name: Go
 on:
   push:
     tags: 
-      - v0.*
-      - v0.*.*
-  pull_request:
-    tags:
-      - v0.*
-      - v0.*.*
+      - v*
+
 jobs:
   build:
     runs-on: ubuntu-latest
