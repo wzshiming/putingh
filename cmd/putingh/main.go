@@ -13,9 +13,23 @@ import (
 
 var usage = `putingh
 Usage:
-	GH_TOKEN=xxx putingh git://owner/repo/branch/name [localfile]
-	GH_TOKEN=xxx putingh asset://owner/repo/release/name [localfile]
-	GH_TOKEN=xxx putingh gist://owner/description/name [localfile]
+	# Put file in git repository
+	GH_TOKEN=you_github_token putingh git://owner/repository/branch/name[/name]... localfile
+	
+	# Put file in git repository release assets
+	GH_TOKEN=you_github_token putingh asset://owner/repository/release/name localfile
+	
+	# Put file in gist
+	GH_TOKEN=you_github_token putingh gist://owner/description/name localfile
+	
+	# Get file from git repository
+	GH_TOKEN=you_github_token putingh git://owner/repository/branch/name[/name]...
+	
+	# Get file from git repository release assets
+	GH_TOKEN=you_github_token putingh asset://owner/repository/release/name
+	
+	# Get file from gist
+	GH_TOKEN=you_github_token putingh gist://owner/description/name
 `
 
 func main() {
