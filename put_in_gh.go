@@ -350,7 +350,7 @@ func (s *PutInGH) PutInReleasesAssetWithFile(ctx context.Context, owner, repo, r
 }
 
 func (s *PutInGH) PutInReleasesAsset(ctx context.Context, owner, repo, release, name string, r io.Reader) (string, error) {
-	filename := filepath.Join(s.conf.TmpDir, owner, repo, release, name)
+	filename := filepath.Join(s.conf.TmpDir, "asset", owner, repo, release, name)
 	os.MkdirAll(filepath.Dir(filename), 0755)
 	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
@@ -453,7 +453,7 @@ func (s *PutInGH) fetchGit(ctx context.Context, owner, repo, branch, name string
 
 	auth := s.gitBasicAuth(owner)
 
-	dir := filepath.Join(s.conf.TmpDir, owner, repo, branch, name)
+	dir := filepath.Join(s.conf.TmpDir, "git", owner, repo, branch)
 	os.MkdirAll(filepath.Dir(dir), 0755)
 
 	remoteName := s.gitRemoteName(branch)
