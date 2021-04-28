@@ -23,6 +23,8 @@ import (
 
 var (
 	ErrNotFound = fmt.Errorf("not found")
+
+	any = "*"
 )
 
 type Config struct {
@@ -83,7 +85,7 @@ func (s *PutInGH) GetFrom(ctx context.Context, uri string) (io.Reader, error) {
 	case "gist":
 		sl := strings.SplitN(url.Path, "/", 3)
 		if len(sl) != 3 {
-			return nil, fmt.Errorf("%q not match gist://owner/description/name", uri)
+			return nil, fmt.Errorf("%q not match gist://owner/gist_id/name", uri)
 		}
 		return s.GetFromGist(ctx, url.Host, sl[1], sl[2])
 	}
@@ -111,7 +113,7 @@ func (s *PutInGH) PutInWithFile(ctx context.Context, uri, filename string) (stri
 	case "gist":
 		sl := strings.SplitN(url.Path, "/", 3)
 		if len(sl) != 3 {
-			return "", fmt.Errorf("%q not match gist://owner/description/name", uri)
+			return "", fmt.Errorf("%q not match gist://owner/gist_id/name", uri)
 		}
 		return s.PutInGistWithFile(ctx, url.Host, sl[1], sl[2], filename)
 	}
@@ -139,27 +141,30 @@ func (s *PutInGH) PutIn(ctx context.Context, uri string, r io.Reader) (string, e
 	case "gist":
 		sl := strings.SplitN(url.Path, "/", 3)
 		if len(sl) != 3 {
-			return "", fmt.Errorf("%q not match gist://owner/description/name", uri)
+			return "", fmt.Errorf("%q not match gist://owner/gist_id/name", uri)
 		}
 		return s.PutInGist(ctx, url.Host, sl[1], sl[2], r)
 	}
 	return "", fmt.Errorf("%q not support", uri)
 }
 
-func (s *PutInGH) PutInGistWithFile(ctx context.Context, owner, description, name string, filename string) (string, error) {
+func (s *PutInGH) PutInGistWithFile(ctx context.Context, owner, gistId, name string, filename string) (string, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
-	return s.PutInGist(ctx, owner, description, name, f)
+	return s.PutInGist(ctx, owner, gistId, name, f)
 }
 
-func (s *PutInGH) GetFromGist(ctx context.Context, owner, description, name string) (io.Reader, error) {
+func (s *PutInGH) GetFromGist(ctx context.Context, owner, gistId, name string) (io.Reader, error) {
 	var oriGist *ghv3.Gist
 	err := s.eachGist(ctx, owner, func(gists []*ghv3.Gist) bool {
 		for _, gist := range gists {
-			if gist.Description != nil && *gist.Description == description {
+			if gist.Description != nil {
+				if gistId != any && *gist.ID != gistId {
+					continue
+				}
 				oriGist = gist
 				return false
 			}
@@ -191,7 +196,7 @@ func (s *PutInGH) GetFromGist(ctx context.Context, owner, description, name stri
 	return nil, ErrNotFound
 }
 
-func (s *PutInGH) PutInGist(ctx context.Context, owner, description, name string, r io.Reader) (string, error) {
+func (s *PutInGH) PutInGist(ctx context.Context, owner, gistId, name string, r io.Reader) (string, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return "", err
@@ -201,7 +206,10 @@ func (s *PutInGH) PutInGist(ctx context.Context, owner, description, name string
 	var oriGist *ghv3.Gist
 	err = s.eachGist(ctx, owner, func(gists []*ghv3.Gist) bool {
 		for _, gist := range gists {
-			if gist.Description != nil && *gist.Description == description {
+			if gist.Description != nil && *gist.Description == gistId {
+				if gistId != any && *gist.ID != gistId {
+					continue
+				}
 				oriGist = gist
 				return false
 			}
@@ -221,7 +229,7 @@ func (s *PutInGH) PutInGist(ctx context.Context, owner, description, name string
 					Content: &dataContext,
 				},
 			},
-			Description: &description,
+			Description: &gistId,
 		})
 		if err != nil {
 			return "", err

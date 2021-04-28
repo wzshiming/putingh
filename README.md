@@ -15,7 +15,7 @@ GH_TOKEN=you_github_token putingh git://owner/repository/branch/name[/name]... l
 GH_TOKEN=you_github_token putingh asset://owner/repository/release/name localfile
 
 # Put file in gist
-GH_TOKEN=you_github_token putingh gist://owner/description/name localfile
+GH_TOKEN=you_github_token putingh gist://owner/gist_id/name localfile
 
 # Get file from git repository
 GH_TOKEN=you_github_token putingh git://owner/repository/branch/name[/name]...
@@ -24,7 +24,7 @@ GH_TOKEN=you_github_token putingh git://owner/repository/branch/name[/name]...
 GH_TOKEN=you_github_token putingh asset://owner/repository/release/name
 
 # Get file from gist
-GH_TOKEN=you_github_token putingh gist://owner/description/name
+GH_TOKEN=you_github_token putingh gist://owner/gist_id/name
 ```
 
 ## License
