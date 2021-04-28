@@ -71,13 +71,13 @@ func (s *PutInGH) GetFrom(ctx context.Context, uri string) (io.Reader, error) {
 	case "git":
 		sl := strings.SplitN(url.Path, "/", 4)
 		if len(sl) != 4 {
-			return nil, fmt.Errorf("%q not match git://owner/repo/branch/name", uri)
+			return nil, fmt.Errorf("%q not match git://owner/repository/branch/name", uri)
 		}
 		return s.GetFromGit(ctx, url.Host, sl[1], sl[2], sl[3])
 	case "asset":
 		sl := strings.SplitN(url.Path, "/", 4)
 		if len(sl) != 4 {
-			return nil, fmt.Errorf("%q not match asset://owner/repo/release/name", uri)
+			return nil, fmt.Errorf("%q not match asset://owner/repository/release/name", uri)
 		}
 		return s.GetFromReleasesAsset(ctx, url.Host, sl[1], sl[2], sl[3])
 	case "gist":
@@ -99,13 +99,13 @@ func (s *PutInGH) PutInWithFile(ctx context.Context, uri, filename string) (stri
 	case "git":
 		sl := strings.SplitN(url.Path, "/", 4)
 		if len(sl) != 4 {
-			return "", fmt.Errorf("%q not match git://owner/repo/branch/name", uri)
+			return "", fmt.Errorf("%q not match git://owner/repository/branch/name", uri)
 		}
 		return s.PutInGitWithFile(ctx, url.Host, sl[1], sl[2], sl[3], filename)
 	case "asset":
 		sl := strings.SplitN(url.Path, "/", 4)
 		if len(sl) != 4 {
-			return "", fmt.Errorf("%q not match asset://owner/repo/release/name", uri)
+			return "", fmt.Errorf("%q not match asset://owner/repository/release/name", uri)
 		}
 		return s.PutInReleasesAssetWithFile(ctx, url.Host, sl[1], sl[2], sl[3], filename)
 	case "gist":
@@ -127,13 +127,13 @@ func (s *PutInGH) PutIn(ctx context.Context, uri string, r io.Reader) (string, e
 	case "git":
 		sl := strings.SplitN(url.Path, "/", 4)
 		if len(sl) != 4 {
-			return "", fmt.Errorf("%q not match git://owner/repo/branch/name", uri)
+			return "", fmt.Errorf("%q not match git://owner/repository/branch/name", uri)
 		}
 		return s.PutInGit(ctx, url.Host, sl[1], sl[2], sl[3], r)
 	case "asset":
 		sl := strings.SplitN(url.Path, "/", 4)
 		if len(sl) != 4 {
-			return "", fmt.Errorf("%q not match asset://owner/repo/release/name", uri)
+			return "", fmt.Errorf("%q not match asset://owner/repository/release/name", uri)
 		}
 		return s.PutInReleasesAsset(ctx, url.Host, sl[1], sl[2], sl[3], r)
 	case "gist":
