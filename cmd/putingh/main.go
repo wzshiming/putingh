@@ -52,12 +52,11 @@ func main() {
 			ctx, _ = context.WithTimeout(ctx, d)
 		}
 	}
-	putter := putingh.NewPutInGH(token, putingh.Config{
-		TmpDir:           os.Getenv("TMP_DIR"),
-		GitName:          os.Getenv("GIT_NAME"),
-		GitEmail:         os.Getenv("GIT_EMAIL"),
-		GitCommitMessage: os.Getenv("GIT_COMMIT_MESSAGE"),
-	})
+	var options []putingh.Option
+	if v, ok := os.LookupEnv("TMP_DIR"); ok {
+		options = append(options, putingh.WithTmpDir(v))
+	}
+	putter := putingh.NewPutInGH(token, options...)
 
 	if len(args) == 2 {
 		url, err := putter.PutInWithFile(ctx, args[0], args[1])

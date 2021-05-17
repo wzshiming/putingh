@@ -22,43 +22,113 @@ import (
 )
 
 var (
+	DefaultOptions = []Option{
+		WithHost("https://github.com"),
+		WithGitAuthorSignature("bot", ""),
+		WithTmpDir("./tmp/"),
+		WithOutput(io.Discard),
+		WithPerPage(100),
+		WithContext(context.Background()),
+		WithGitCommitMessage(func(owner, repo, branch, name, path string) string {
+			return fmt.Sprintf("Automatic update %s", name)
+		}),
+	}
+
 	ErrNotFound = fmt.Errorf("not found")
 
 	any = "*"
 )
 
-type Config struct {
-	TmpDir           string
-	GitName          string
-	GitEmail         string
-	GitCommitMessage string
-}
+type Option func(p *PutInGH)
 
-func (c *Config) setDefault() {
-	if c.TmpDir == "" {
-		c.TmpDir = "./tmp/"
+func NewPutInGH(token string, options ...Option) *PutInGH {
+	p := &PutInGH{
+		token: token,
 	}
-	if c.GitName == "" {
-		c.GitName = "bot"
-	}
-}
 
-func NewPutInGH(token string, conf Config) *PutInGH {
-	conf.setDefault()
+	for _, opt := range DefaultOptions {
+		if opt != nil {
+			opt(p)
+		}
+	}
+
+	for _, opt := range options {
+		if opt != nil {
+			opt(p)
+		}
+	}
 	src := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: token},
 	)
-	httpClient := oauth2.NewClient(context.Background(), src)
-	return &PutInGH{
-		token:   token,
-		conf:    conf,
-		httpCli: httpClient,
-		cliv3:   ghv3.NewClient(httpClient),
+	httpClient := oauth2.NewClient(p.ctx, src)
+	p.httpCli = httpClient
+	p.cliv3 = ghv3.NewClient(httpClient)
+	return p
+}
+
+func WithTmpDir(dir string) Option {
+	return func(p *PutInGH) {
+		p.tmpDir = dir
+	}
+}
+
+func WithGitCommitMessage(fn func(owner, repo, branch, name, path string) string) Option {
+	return func(p *PutInGH) {
+		p.gitCommitMessage = fn
+	}
+}
+
+func WithGitAuthorSignature(username, email string) Option {
+	return WithGitCommitOptions(func(owner, repo, branch, name, path string) *gogit.CommitOptions {
+		return &gogit.CommitOptions{
+			Author: &object.Signature{
+				Name:  username,
+				Email: email,
+				When:  time.Now(),
+			},
+		}
+	})
+}
+
+func WithGitCommitOptions(fn func(owner, repo, branch, name, path string) (opt *gogit.CommitOptions)) Option {
+	return func(p *PutInGH) {
+		p.gitCommitOption = fn
+	}
+}
+
+func WithContext(ctx context.Context) Option {
+	return func(p *PutInGH) {
+		p.ctx = ctx
+	}
+}
+
+func WithOutput(out io.Writer) Option {
+	return func(p *PutInGH) {
+		p.out = out
+	}
+}
+
+func WithHost(host string) Option {
+	return func(p *PutInGH) {
+		p.host = host
+	}
+}
+
+func WithPerPage(perPage int) Option {
+	return func(p *PutInGH) {
+		p.perPage = perPage
 	}
 }
 
 type PutInGH struct {
-	conf    Config
+	tmpDir           string
+	gitCommitMessage func(owner, repo, branch, name, path string) (msg string)
+	gitCommitOption  func(owner, repo, branch, name, path string) (opt *gogit.CommitOptions)
+	ctx              context.Context
+	out              io.Writer
+	host             string
+	perPage          int
+
 	token   string
 	httpCli *http.Client
 	cliv3   *ghv3.Client
@@ -358,7 +428,7 @@ func (s *PutInGH) PutInReleasesAssetWithFile(ctx context.Context, owner, repo, r
 }
 
 func (s *PutInGH) PutInReleasesAsset(ctx context.Context, owner, repo, release, name string, r io.Reader) (string, error) {
-	filename := filepath.Join(s.conf.TmpDir, "asset", owner, repo, release, name)
+	filename := filepath.Join(s.tmpDir, "asset", owner, repo, release, name)
 	os.MkdirAll(filepath.Dir(filename), 0755)
 	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
@@ -428,26 +498,16 @@ func (s *PutInGH) PutInGit(ctx context.Context, owner, repo, branch, name string
 	if len(status) != 0 &&
 		status[name] != nil &&
 		(status[name].Staging != gogit.Unmodified || status[name].Worktree != gogit.Unmodified) {
-		now := time.Now()
-
-		message := s.conf.GitCommitMessage
-		if message == "" {
-			message = fmt.Sprintf("Automatic updated %s", now.Format(time.RFC3339))
-		}
-		_, err = work.Commit(message, &gogit.CommitOptions{
-			Author: &object.Signature{
-				Name:  s.conf.GitName,
-				Email: s.conf.GitEmail,
-				When:  now,
-			},
-		})
+		opt := s.gitCommitOption(owner, repo, branch, name, fname)
+		message := s.gitCommitMessage(owner, repo, branch, name, fname)
+		_, err = work.Commit(message, opt)
 		if err != nil {
 			return "", fmt.Errorf("git commit: %w", err)
 		}
 		err = repository.PushContext(ctx, &gogit.PushOptions{
 			Auth:       s.gitBasicAuth(owner),
 			RemoteName: s.gitRemoteName(branch),
-			Progress:   os.Stderr,
+			Progress:   s.out,
 		})
 		if err != nil {
 			return "", fmt.Errorf("git push: %w", err)
@@ -461,7 +521,7 @@ func (s *PutInGH) fetchGit(ctx context.Context, owner, repo, branch, name string
 
 	auth := s.gitBasicAuth(owner)
 
-	dir := filepath.Join(s.conf.TmpDir, "git", owner, repo, branch)
+	dir := filepath.Join(s.tmpDir, "git", owner, repo, branch)
 	os.MkdirAll(filepath.Dir(dir), 0755)
 
 	remoteName := s.gitRemoteName(branch)
@@ -524,7 +584,7 @@ func (s *PutInGH) fetchGit(ctx context.Context, owner, repo, branch, name string
 	err = remote.FetchContext(ctx, &gogit.FetchOptions{
 		RemoteName: remoteName,
 		RefSpecs:   fetch,
-		Progress:   os.Stderr,
+		Progress:   s.out,
 		Auth:       auth,
 	})
 	if err != nil && err != gogit.NoErrAlreadyUpToDate {
@@ -575,7 +635,7 @@ func (s *PutInGH) gitBasicAuth(owner string) *gogithttp.BasicAuth {
 }
 
 func (s *PutInGH) gitURL(owner, repo string) string {
-	return "https://github.com/" + owner + "/" + repo
+	return strings.Join([]string{s.host, owner, repo}, "/")
 }
 
 func (s *PutInGH) httpGet(ctx context.Context, uri string) (*http.Response, error) {
@@ -588,7 +648,7 @@ func (s *PutInGH) httpGet(ctx context.Context, uri string) (*http.Response, erro
 
 func (s *PutInGH) eachReleases(ctx context.Context, owner, repo string, next func([]*ghv3.RepositoryRelease) bool) error {
 	opt := &ghv3.ListOptions{
-		PerPage: 100,
+		PerPage: s.perPage,
 	}
 
 	for {
@@ -612,7 +672,7 @@ func (s *PutInGH) eachReleases(ctx context.Context, owner, repo string, next fun
 
 func (s *PutInGH) eachGist(ctx context.Context, owner string, next func([]*ghv3.Gist) bool) error {
 	opt := ghv3.ListOptions{
-		PerPage: 100,
+		PerPage: s.perPage,
 	}
 	for {
 		list, resp, err := s.cliv3.Gists.List(ctx, owner, &ghv3.GistListOptions{
