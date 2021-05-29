@@ -46,22 +46,22 @@ func NewPutInGH(token string, options ...Option) *PutInGH {
 		token: token,
 	}
 
-	for _, opt := range DefaultOptions {
-		if opt != nil {
-			opt(p)
-		}
-	}
-
-	for _, opt := range options {
-		if opt != nil {
-			opt(p)
-		}
-	}
 	src := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: token},
 	)
 	httpClient := oauth2.NewClient(p.ctx, src)
 	p.httpCli = httpClient
+
+	for _, opt := range DefaultOptions {
+		if opt != nil {
+			opt(p)
+		}
+	}
+	for _, opt := range options {
+		if opt != nil {
+			opt(p)
+		}
+	}
 	p.cliv3 = ghv3.NewClient(httpClient)
 	return p
 }
@@ -117,6 +117,12 @@ func WithHost(host string) Option {
 func WithPerPage(perPage int) Option {
 	return func(p *PutInGH) {
 		p.perPage = perPage
+	}
+}
+
+func WithHTTPClient(fun func(cli *http.Client) *http.Client) Option {
+	return func(p *PutInGH) {
+		p.httpCli = fun(p.httpCli)
 	}
 }
 
@@ -367,7 +373,6 @@ func (s *PutInGH) GetFromReleasesAsset(ctx context.Context, owner, repo, release
 		return nil, err
 	}
 	return newReaderWithAutoCloser(resp.Body), nil
-
 }
 
 func (s *PutInGH) PutInReleasesAssetWithFile(ctx context.Context, owner, repo, release, name string, filename string) (string, error) {
