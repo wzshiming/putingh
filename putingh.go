@@ -379,7 +379,7 @@ func (s *PutInGH) PutInReleasesAssetWithFile(ctx context.Context, owner, repo, r
 	var releaseID *int64
 	err := s.eachReleases(ctx, owner, repo, func(releases []*ghv3.RepositoryRelease) bool {
 		for _, r := range releases {
-			if r.Name != nil && *r.Name == release {
+			if r.TagName != nil && *r.TagName == release {
 				releaseID = r.ID
 				return false
 			}
