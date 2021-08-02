@@ -27,6 +27,10 @@ GH_TOKEN=you_github_token putingh asset://owner/repository/release/name
 GH_TOKEN=you_github_token putingh gist://owner/gist_id/name
 ```
 
+## Example
+
+[wzshiming/action-upload-release-assets](https://github.com/wzshiming/action-upload-release-assets)
+
 ## License
 
 Licensed under the MIT License. See [LICENSE](https://github.com/wzshiming/putingh/blob/master/LICENSE) for the full license text.
