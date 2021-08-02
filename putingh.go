@@ -18,6 +18,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	gogithttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 	ghv3 "github.com/google/go-github/v33/github"
+	"github.com/wzshiming/httpcache"
 	"golang.org/x/oauth2"
 )
 
@@ -62,7 +63,27 @@ func NewPutInGH(token string, options ...Option) *PutInGH {
 			opt(p)
 		}
 	}
-	p.cliv3 = ghv3.NewClient(httpClient)
+
+	opts := []httpcache.Option{}
+	if p.tmpDir != "" {
+		opts = append(opts, httpcache.WithStorer(httpcache.DirectoryStorer(p.tmpDir)))
+	}
+	p.cliv3 = ghv3.NewClient(&http.Client{
+		Transport: httpcache.NewRoundTripper(httpClient.Transport,
+			append([]httpcache.Option{
+				httpcache.WithFilterer(
+					httpcache.MethodFilterer(http.MethodGet),
+				),
+				httpcache.WithKeyer(
+					httpcache.JointKeyer(
+						httpcache.MethodKeyer(),
+						httpcache.HostKeyer(),
+						httpcache.PathKeyer(),
+					),
+				),
+			}, opts...)...,
+		),
+	})
 	return p
 }
 
