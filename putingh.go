@@ -353,18 +353,14 @@ func (s *PutInGH) PutInGist(ctx context.Context, owner, gistId, name string, r i
 }
 
 func (s *PutInGH) GetFromReleasesAsset(ctx context.Context, owner, repo, release, name string) (io.Reader, error) {
-	var releaseID *int64
-	err := s.eachReleases(ctx, owner, repo, func(releases []*ghv3.RepositoryRelease) bool {
-		for _, r := range releases {
-			if r.Name != nil && *r.Name == release {
-				releaseID = r.ID
-				return false
-			}
-		}
-		return true
-	})
-	if err != nil {
+	respRelease, response, err := s.cliv3.Repositories.GetReleaseByTag(ctx, owner, repo, release)
+	if err != nil && response.StatusCode != http.StatusNotFound {
 		return nil, err
+	}
+
+	var releaseID *int64
+	if respRelease != nil {
+		releaseID = respRelease.ID
 	}
 
 	if releaseID == nil {
@@ -397,18 +393,14 @@ func (s *PutInGH) GetFromReleasesAsset(ctx context.Context, owner, repo, release
 }
 
 func (s *PutInGH) PutInReleasesAssetWithFile(ctx context.Context, owner, repo, release, name string, filename string) (string, error) {
-	var releaseID *int64
-	err := s.eachReleases(ctx, owner, repo, func(releases []*ghv3.RepositoryRelease) bool {
-		for _, r := range releases {
-			if r.TagName != nil && *r.TagName == release {
-				releaseID = r.ID
-				return false
-			}
-		}
-		return true
-	})
-	if err != nil {
+	respRelease, response, err := s.cliv3.Repositories.GetReleaseByTag(ctx, owner, repo, release)
+	if err != nil && response.StatusCode != http.StatusNotFound {
 		return "", err
+	}
+
+	var releaseID *int64
+	if respRelease != nil {
+		releaseID = respRelease.ID
 	}
 
 	if releaseID == nil {
