@@ -237,10 +237,13 @@ func (s *PutInGH) GetFromGist(ctx context.Context, owner, gistId, name string) (
 	var oriGist *ghv3.Gist
 	err := s.eachGist(ctx, owner, func(gists []*ghv3.Gist) bool {
 		for _, gist := range gists {
-			if gist.Description != nil {
-				if gistId != any && *gist.ID != gistId {
-					continue
+			if gistId == any {
+				_, ok := gist.Files[ghv3.GistFilename(name)]
+				if ok {
+					oriGist = gist
+					return false
 				}
+			} else if *gist.ID == gistId {
 				oriGist = gist
 				return false
 			}
@@ -282,10 +285,13 @@ func (s *PutInGH) PutInGist(ctx context.Context, owner, gistId, name string, r i
 	var oriGist *ghv3.Gist
 	err = s.eachGist(ctx, owner, func(gists []*ghv3.Gist) bool {
 		for _, gist := range gists {
-			if gist.Description != nil && *gist.Description == gistId {
-				if gistId != any && *gist.ID != gistId {
-					continue
+			if gistId == any {
+				_, ok := gist.Files[ghv3.GistFilename(name)]
+				if ok {
+					oriGist = gist
+					return false
 				}
+			} else if *gist.ID == gistId {
 				oriGist = gist
 				return false
 			}
