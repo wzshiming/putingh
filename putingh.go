@@ -318,20 +318,17 @@ func (s *PutInGH) PutInGist(ctx context.Context, owner, gistId, name string, r i
 		}
 		raw = *gist.Files[ghv3.GistFilename(name)].RawURL
 	} else {
-		file := oriGist.Files[ghv3.GistFilename(name)]
-		if file.Content != nil && *file.Content == dataContext {
-			raw = *oriGist.Files[ghv3.GistFilename(name)].RawURL
-		} else {
-			oriGist.Files[ghv3.GistFilename(name)] = ghv3.GistFile{
+		oriGist.Files = map[ghv3.GistFilename]ghv3.GistFile{
+			ghv3.GistFilename(name): {
 				Filename: &name,
 				Content:  &dataContext,
-			}
-			gist, _, err := s.cliv3.Gists.Edit(ctx, *oriGist.ID, oriGist)
-			if err != nil {
-				return "", err
-			}
-			raw = *gist.Files[ghv3.GistFilename(name)].RawURL
+			},
 		}
+		gist, _, err := s.cliv3.Gists.Edit(ctx, *oriGist.ID, oriGist)
+		if err != nil {
+			return "", err
+		}
+		raw = *gist.Files[ghv3.GistFilename(name)].RawURL
 	}
 	raw = strings.SplitN(raw, "/raw/", 2)[0] + "/raw/" + name
 	return raw, nil
