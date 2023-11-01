@@ -3,6 +3,7 @@ package putingh
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	gogitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 	gogithttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 	ghv3 "github.com/google/go-github/v56/github"
 	"golang.org/x/oauth2"
@@ -36,7 +38,7 @@ var (
 
 	ErrNotFound = fmt.Errorf("not found")
 
-	any = "*"
+	anyFile = "*"
 )
 
 type Option func(p *PutInGH)
@@ -169,75 +171,75 @@ func (s *PutInGH) GetFrom(ctx context.Context, uri string) (io.Reader, error) {
 }
 
 func (s *PutInGH) PutInWithFile(ctx context.Context, uri, filename string) (string, error) {
-	url, err := url.Parse(uri)
+	u, err := url.Parse(uri)
 	if err != nil {
 		return "", err
 	}
-	switch url.Scheme {
+	switch u.Scheme {
 	case "git":
-		sl := strings.SplitN(url.Path, "/", 4)
+		sl := strings.SplitN(u.Path, "/", 4)
 		if len(sl) != 4 {
 			return "", fmt.Errorf("%q not match git://owner/repository/branch/name", uri)
 		}
-		return s.PutInGitWithFile(ctx, url.Host, sl[1], sl[2], sl[3], filename)
+		return s.putInGitWithFile(ctx, u.Host, sl[1], sl[2], sl[3], filename)
 	case "asset":
-		sl := strings.SplitN(url.Path, "/", 4)
+		sl := strings.SplitN(u.Path, "/", 4)
 		if len(sl) != 4 {
 			return "", fmt.Errorf("%q not match asset://owner/repository/release/name", uri)
 		}
-		return s.PutInReleasesAssetWithFile(ctx, url.Host, sl[1], sl[2], sl[3], filename)
+		return s.putInReleasesAssetWithFile(ctx, u.Host, sl[1], sl[2], sl[3], filename)
 	case "gist":
-		sl := strings.SplitN(url.Path, "/", 3)
+		sl := strings.SplitN(u.Path, "/", 3)
 		if len(sl) != 3 {
 			return "", fmt.Errorf("%q not match gist://owner/gist_id/name", uri)
 		}
-		return s.PutInGistWithFile(ctx, url.Host, sl[1], sl[2], filename)
+		return s.putInGistWithFile(ctx, u.Host, sl[1], sl[2], filename)
 	}
 	return "", fmt.Errorf("%q not support", uri)
 }
 
 func (s *PutInGH) PutIn(ctx context.Context, uri string, r io.Reader) (string, error) {
-	url, err := url.Parse(uri)
+	u, err := url.Parse(uri)
 	if err != nil {
 		return "", err
 	}
-	switch url.Scheme {
+	switch u.Scheme {
 	case "git":
-		sl := strings.SplitN(url.Path, "/", 4)
+		sl := strings.SplitN(u.Path, "/", 4)
 		if len(sl) != 4 {
 			return "", fmt.Errorf("%q not match git://owner/repository/branch/name", uri)
 		}
-		return s.PutInGit(ctx, url.Host, sl[1], sl[2], sl[3], r)
+		return s.putInGit(ctx, u.Host, sl[1], sl[2], sl[3], r)
 	case "asset":
-		sl := strings.SplitN(url.Path, "/", 4)
+		sl := strings.SplitN(u.Path, "/", 4)
 		if len(sl) != 4 {
 			return "", fmt.Errorf("%q not match asset://owner/repository/release/name", uri)
 		}
-		return s.PutInReleasesAsset(ctx, url.Host, sl[1], sl[2], sl[3], r)
+		return s.putInReleasesAsset(ctx, u.Host, sl[1], sl[2], sl[3], r)
 	case "gist":
-		sl := strings.SplitN(url.Path, "/", 3)
+		sl := strings.SplitN(u.Path, "/", 3)
 		if len(sl) != 3 {
 			return "", fmt.Errorf("%q not match gist://owner/gist_id/name", uri)
 		}
-		return s.PutInGist(ctx, url.Host, sl[1], sl[2], r)
+		return s.putInGist(ctx, u.Host, sl[1], sl[2], r)
 	}
 	return "", fmt.Errorf("%q not support", uri)
 }
 
-func (s *PutInGH) PutInGistWithFile(ctx context.Context, owner, gistId, name string, filename string) (string, error) {
+func (s *PutInGH) putInGistWithFile(ctx context.Context, owner, gistId, name string, filename string) (string, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
-	return s.PutInGist(ctx, owner, gistId, name, f)
+	return s.putInGist(ctx, owner, gistId, name, f)
 }
 
 func (s *PutInGH) GetFromGist(ctx context.Context, owner, gistId, name string) (io.Reader, error) {
 	var oriGist *ghv3.Gist
 	err := s.eachGist(ctx, owner, func(gists []*ghv3.Gist) bool {
 		for _, gist := range gists {
-			if gistId == any {
+			if gistId == anyFile {
 				_, ok := gist.Files[ghv3.GistFilename(name)]
 				if ok {
 					oriGist = gist
@@ -275,7 +277,7 @@ func (s *PutInGH) GetFromGist(ctx context.Context, owner, gistId, name string) (
 	return nil, ErrNotFound
 }
 
-func (s *PutInGH) PutInGist(ctx context.Context, owner, gistId, name string, r io.Reader) (string, error) {
+func (s *PutInGH) putInGist(ctx context.Context, owner, gistId, name string, r io.Reader) (string, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return "", err
@@ -285,7 +287,7 @@ func (s *PutInGH) PutInGist(ctx context.Context, owner, gistId, name string, r i
 	var oriGist *ghv3.Gist
 	err = s.eachGist(ctx, owner, func(gists []*ghv3.Gist) bool {
 		for _, gist := range gists {
-			if gistId == any {
+			if gistId == anyFile {
 				_, ok := gist.Files[ghv3.GistFilename(name)]
 				if ok {
 					oriGist = gist
@@ -374,7 +376,7 @@ func (s *PutInGH) GetFromReleasesAsset(ctx context.Context, owner, repo, release
 	return newReaderWithAutoCloser(resp.Body), nil
 }
 
-func (s *PutInGH) PutInReleasesAssetWithFile(ctx context.Context, owner, repo, release, name string, filename string) (string, error) {
+func (s *PutInGH) putInReleasesAssetWithFile(ctx context.Context, owner, repo, release, name string, filename string) (string, error) {
 	respRelease, response, err := s.cliv3.Repositories.GetReleaseByTag(ctx, owner, repo, release)
 	if err != nil && response.StatusCode != http.StatusNotFound {
 		return "", err
@@ -427,7 +429,7 @@ func (s *PutInGH) PutInReleasesAssetWithFile(ctx context.Context, owner, repo, r
 	return *respAsset.BrowserDownloadURL, nil
 }
 
-func (s *PutInGH) PutInReleasesAsset(ctx context.Context, owner, repo, release, name string, r io.Reader) (string, error) {
+func (s *PutInGH) putInReleasesAsset(ctx context.Context, owner, repo, release, name string, r io.Reader) (string, error) {
 	filename := filepath.Join(s.tmpDir, "asset", owner, repo, release, name)
 	os.MkdirAll(filepath.Dir(filename), 0755)
 	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
@@ -439,11 +441,11 @@ func (s *PutInGH) PutInReleasesAsset(ctx context.Context, owner, repo, release, 
 		return "", err
 	}
 	f.Close()
-	return s.PutInReleasesAssetWithFile(ctx, owner, repo, release, name, filename)
+	return s.putInReleasesAssetWithFile(ctx, owner, repo, release, name, filename)
 }
 
 func (s *PutInGH) GetFromGit(ctx context.Context, owner, repo, branch, name string) (io.Reader, error) {
-	dir, _, err := s.fetchGit(ctx, owner, repo, branch, name)
+	dir, _, err := s.fetchGit(ctx, owner, repo, branch)
 	if err != nil {
 		return nil, err
 	}
@@ -455,22 +457,25 @@ func (s *PutInGH) GetFromGit(ctx context.Context, owner, repo, branch, name stri
 	return newReaderWithAutoCloser(f), nil
 }
 
-func (s *PutInGH) PutInGitWithFile(ctx context.Context, owner, repo, branch, name string, filename string) (string, error) {
+func (s *PutInGH) putInGitWithFile(ctx context.Context, owner, repo, branch, name string, filename string) (string, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
-	return s.PutInGit(ctx, owner, repo, branch, name, f)
+	return s.putInGit(ctx, owner, repo, branch, name, f)
 }
 
-func (s *PutInGH) PutInGit(ctx context.Context, owner, repo, branch, name string, r io.Reader) (string, error) {
-	dir, repository, err := s.fetchGit(ctx, owner, repo, branch, name)
+func (s *PutInGH) putInGit(ctx context.Context, owner, repo, branch, name string, r io.Reader) (string, error) {
+	dir, repository, err := s.fetchGit(ctx, owner, repo, branch)
 	if err != nil {
 		return "", err
 	}
 	fname := filepath.Join(dir, name)
-	os.MkdirAll(filepath.Dir(fname), 0755)
+	err = os.MkdirAll(filepath.Dir(fname), 0755)
+	if err != nil {
+		return "", err
+	}
 	f, err := os.OpenFile(fname, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return "", err
@@ -516,7 +521,7 @@ func (s *PutInGH) PutInGit(ctx context.Context, owner, repo, branch, name string
 	return s.gitURL(owner, repo) + "/raw/" + branch + "/" + name, nil
 }
 
-func (s *PutInGH) fetchGit(ctx context.Context, owner, repo, branch, name string) (string, *gogit.Repository, error) {
+func (s *PutInGH) fetchGit(ctx context.Context, owner, repo, branch string) (string, *gogit.Repository, error) {
 	giturl := s.gitURL(owner, repo)
 
 	auth := s.gitBasicAuth(owner)
@@ -548,7 +553,7 @@ func (s *PutInGH) fetchGit(ctx context.Context, owner, repo, branch, name string
 
 	remote, err := repository.Remote(remoteName)
 	if err != nil {
-		if err != gogit.ErrRemoteNotFound {
+		if !errors.Is(err, gogit.ErrRemoteNotFound) {
 			return "", nil, err
 		}
 		c := &gogitconfig.RemoteConfig{
@@ -564,7 +569,7 @@ func (s *PutInGH) fetchGit(ctx context.Context, owner, repo, branch, name string
 
 	_, err = repository.Branch(branch)
 	if err != nil {
-		if err != gogit.ErrBranchNotFound {
+		if !errors.Is(err, gogit.ErrBranchNotFound) {
 			return "", nil, err
 		}
 		err = repository.CreateBranch(&gogitconfig.Branch{
@@ -587,8 +592,9 @@ func (s *PutInGH) fetchGit(ctx context.Context, owner, repo, branch, name string
 		Progress:   s.out,
 		Auth:       auth,
 	})
-	if err != nil && err != gogit.NoErrAlreadyUpToDate {
-		if _, ok := err.(gogit.NoMatchingRefSpecError); !ok {
+	if err != nil && !errors.Is(err, gogit.NoErrAlreadyUpToDate) && !errors.Is(err, transport.ErrEmptyRemoteRepository) {
+		var noMatchingRefSpecError gogit.NoMatchingRefSpecError
+		if !errors.As(err, &noMatchingRefSpecError) {
 			return "", nil, fmt.Errorf("git fetch: %w", err)
 		}
 	}
