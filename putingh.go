@@ -17,7 +17,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	gogithttp "github.com/go-git/go-git/v5/plumbing/transport/http"
-	ghv3 "github.com/google/go-github/v33/github"
+	ghv3 "github.com/google/go-github/v56/github"
 	"golang.org/x/oauth2"
 )
 
